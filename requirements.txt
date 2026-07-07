@@ -1,0 +1,9 @@
+aiogram>=3.4
+sqlalchemy[asyncio]>=2.0
+asyncpg
+aiosqlite
+alembic
+redis
+apscheduler
+pydantic-settings
+python-dotenv
