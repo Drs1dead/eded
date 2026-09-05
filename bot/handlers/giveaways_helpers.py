@@ -3,8 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.inline import back_to_menu_kb
 from bot.models import Giveaway, GiveawayStatus, GiveawayType, ParticipationStatus
-from bot.services.giveaways import count_participants, get_participation
-from bot.utils.helpers import GIVEAWAY_TYPE_LABELS
+from bot.services.giveaways import count_participants, get_participation, list_giveaway_participants
+from bot.utils.helpers import GIVEAWAY_TYPE_LABELS, format_user
 from bot.utils.pagination import paginate
 
 
@@ -68,6 +68,20 @@ async def send_giveaway_detail(message: Message, gw: Giveaway, user_db_id: int, 
     text = giveaway_card_text(gw, await count_participants(session, gw.id))
     if gw.giveaway_type == GiveawayType.randomizer:
         text += "\n🎲 Победитель определяется случайно среди одобренных участников."
+        participants = await list_giveaway_participants(
+            session, gw.id, approved_only=True
+        )
+        if participants:
+            visible = participants[:20]
+            text += "\n\n👥 <b>Участники бинго:</b>\n"
+            text += "\n".join(
+                f"{index}. {format_user(user)}"
+                for index, (_, user) in enumerate(visible, start=1)
+            )
+            if len(participants) > len(visible):
+                text += f"\n…и ещё {len(participants) - len(visible)}"
+        else:
+            text += "\n\n👥 Участников бинго пока нет."
     kb = giveaway_detail_kb(gw, status, part)
     if gw.media and gw.media.get("type") == "photo":
         await message.answer_photo(gw.media["file_id"], caption=text, reply_markup=kb, parse_mode="HTML")

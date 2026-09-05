@@ -11,6 +11,7 @@ from bot.services.giveaways import (
     count_eligible_participants,
     count_participants,
     create_giveaway,
+    list_giveaway_participants,
     list_admin_active_giveaways,
     publish_to_channels,
     run_randomizer_draw,
@@ -55,6 +56,10 @@ async def admin_active_giveaways(callback: CallbackQuery) -> None:
             text += f"• <b>{gw.title}</b> ({type_label})\n   👥 {participants}{extra}{deadline}\n"
             row = [
                 InlineKeyboardButton(text=f"⏹ Завершить #{gw.id}", callback_data=f"admin:gw_close:{gw.id}"),
+                InlineKeyboardButton(
+                    text="👥 Участники",
+                    callback_data=f"admin:gw_participants:{gw.id}",
+                ),
             ]
             if gw.giveaway_type == GiveawayType.randomizer and not gw.draw_completed:
                 row.append(
@@ -66,6 +71,46 @@ async def admin_active_giveaways(callback: CallbackQuery) -> None:
             text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             parse_mode="HTML",
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:gw_participants:"))
+async def admin_giveaway_participants(callback: CallbackQuery) -> None:
+    if not callback.message or not callback.from_user:
+        return
+    gw_id = int(callback.data.split(":")[-1])
+    async with async_session() as session:
+        if not await is_staff(session, callback.from_user.id):
+            await callback.answer("Нет доступа", show_alert=True)
+            return
+        gw = await session.get(Giveaway, gw_id)
+        if not gw:
+            await callback.answer("Розыгрыш не найден", show_alert=True)
+            return
+        participants = await list_giveaway_participants(session, gw_id)
+        status_icons = {
+            "in_progress": "📝",
+            "on_review": "⏳",
+            "approved": "✅",
+            "rejected": "❌",
+        }
+        lines = [f"👥 <b>Участники: {gw.title}</b>", ""]
+        if participants:
+            for index, (participation, user) in enumerate(participants[:50], start=1):
+                icon = status_icons.get(participation.status.value, "•")
+                lines.append(f"{index}. {icon} {format_user(user)}")
+            if len(participants) > 50:
+                lines.append(f"…и ещё {len(participants) - 50}")
+        else:
+            lines.append("Участников пока нет.")
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[
+                InlineKeyboardButton(text="🔙 Активные розыгрыши", callback_data="admin:active_gw")
+            ]]
+        )
+        await callback.message.edit_text(
+            "\n".join(lines), reply_markup=keyboard, parse_mode="HTML"
         )
     await callback.answer()
 

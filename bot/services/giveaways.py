@@ -89,6 +89,25 @@ async def count_eligible_participants(session: AsyncSession, giveaway_id: int) -
     return result.scalar() or 0
 
 
+async def list_giveaway_participants(
+    session: AsyncSession,
+    giveaway_id: int,
+    *,
+    approved_only: bool = False,
+) -> list[tuple[Participation, User]]:
+    """Return participants together with their user profiles."""
+    query = (
+        select(Participation, User)
+        .join(User, User.id == Participation.user_id)
+        .where(Participation.giveaway_id == giveaway_id)
+        .order_by(Participation.created_at.asc())
+    )
+    if approved_only:
+        query = query.where(Participation.status == ParticipationStatus.approved)
+    result = await session.execute(query)
+    return [(participation, user) for participation, user in result.all()]
+
+
 async def list_active_giveaways(session: AsyncSession, page: int = 0, per_page: int = 5) -> tuple[list[Giveaway], int]:
     now = utcnow()
     q = (

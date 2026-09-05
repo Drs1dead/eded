@@ -37,6 +37,24 @@ async def get_or_create_user(
 
 
 async def is_whitelisted(session: AsyncSession, telegram_id: int) -> bool:
+    # Superadmins from ADMIN_IDS and regular admins stored in staff_roles
+    # must pass the global whitelist middleware too.
+    from bot.config import settings
+
+    if telegram_id in settings.admin_id_list:
+        return True
+
+    staff_result = await session.execute(
+        select(StaffRoleEntry)
+        .join(User)
+        .where(
+            User.telegram_id == telegram_id,
+            StaffRoleEntry.role == StaffRole.admin,
+        )
+    )
+    if staff_result.scalar_one_or_none() is not None:
+        return True
+
     result = await session.execute(
         select(WhitelistEntry)
         .join(User)
